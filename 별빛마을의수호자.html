@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>별빛 마을의 수호자</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#0b1630;font-family:"Malgun Gothic",system-ui,sans-serif;touch-action:none;user-select:none}canvas{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated}.ui{position:fixed;inset:0;pointer-events:none;color:#fff;text-shadow:2px 2px 0 #000}.status{position:absolute;left:12px;top:10px;width:230px;padding:10px;border:3px solid #2d3655;border-radius:8px;background:#151d35d9}.portrait{float:left;width:44px;height:44px;margin-right:9px;border:3px solid #69759a;border-radius:5px;background:#6d8f58;overflow:hidden}.portrait:after{content:"";display:block;width:23px;height:25px;margin:10px 0 0 10px;border:3px solid #4a3a36;border-radius:7px;background:#d9a36f;box-shadow:0 16px 0 -3px #4e5d99}.name{font-size:14px;font-weight:900}.lv{font-size:11px;color:#ffe975}.bar{clear:right;height:10px;margin-top:5px;border:2px solid #111;border-radius:3px;background:#2c2634;overflow:hidden}.bar i{display:block;height:100%}.hp i{background:#ec5b73}.mp i{background:#55aef3}.xp i{background:#93d64c}.quest{position:absolute;left:13px;top:118px;width:215px;padding:9px;border:3px solid #604c35;border-radius:7px;background:#172032e6;font-size:12px}.quest b{display:block;color:#ffe477;margin-bottom:4px}.zone{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:900;opacity:.9}.gold{position:absolute;right:12px;top:12px;padding:8px 12px;border:3px solid #65512f;border-radius:7px;background:#1a2031d9;font-weight:900;color:#ffe06e}.dialog{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(700px,92%);display:none;padding:12px 16px;border:4px solid #7d6e58;border-radius:10px;background:#17213ae9;font-size:14px;line-height:1.45}.dialog.show{display:block}.buttons{position:absolute;right:14px;bottom:22px;display:flex;gap:10px;align-items:flex-end;pointer-events:auto}.btn{width:67px;height:67px;border:3px solid #d2d9ed88;border-radius:50%;background:#26375de8;color:#fff;font-size:13px;font-weight:900;text-shadow:1px 1px #000;box-shadow:0 5px 12px #0007;pointer-events:auto}.btn.attack{width:82px;height:82px;background:#b46c58e8}.btn.skill{background:#3c75a8e8}.btn.jump{background:#487d64e8}.btn:active{transform:scale(.94)}.stick{position:absolute;left:20px;bottom:25px;width:116px;height:116px;display:none;border:3px solid #d6e0ff55;border-radius:50%;background:#d8e4ff22;pointer-events:auto}.nub{position:absolute;left:38px;top:38px;width:40px;height:40px;border-radius:50%;background:#eef5ff77}.padkeys{position:absolute;left:15px;bottom:10px;font-size:11px;color:#e9f1ffb0}@media(pointer:coarse),(max-width:800px){.stick{display:block}.buttons{bottom:18px}.status{width:190px}.quest{top:100px;width:190px}.padkeys{display:none}}@media(max-width:520px){.status{width:165px;transform:scale(.88);transform-origin:top left}.quest{transform:scale(.86);transform-origin:top left}.gold{right:8px;top:8px}.buttons{gap:5px}.btn{width:58px;height:58px}.btn.attack{width:72px;height:72px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="ui">
+ <div class="status"><div class="portrait"></div><div class="name">별빛 모험가</div><div class="lv" id="lv">LV. 1</div><div class="bar hp"><i id="hp"></i></div><div class="bar mp"><i id="mp"></i></div><div class="bar xp"><i id="xp"></i></div></div>
+ <div class="quest" id="quest"><b>첫 번째 의뢰</b><span>초록달팽이를 5마리 처치하세요</span><br><span id="qcount">0 / 5</span></div>
+ <div class="zone" id="zone">바람나무 숲 입구</div><div class="gold" id="gold">메소 0</div>
+ <div class="dialog" id="dialog">리나: 안녕하신가요! 숲길의 초록달팽이를 조금만 처치해 주실래요?</div>
+ <div class="padkeys">이동 ← → 또는 A D　점프 Z / ↑　공격 X　스킬 C</div>
+ <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+ <div class="buttons"><button class="btn skill" id="skill">스킬 C</button><button class="btn jump" id="jump">점프 Z</button><button class="btn attack" id="attack">공격 X</button></div>
+</div>
+<script>
+'use strict';
+const cvs=document.getElementById('game'),ctx=cvs.getContext('2d');
+let W=innerWidth,H=innerHeight,D=Math.min(devicePixelRatio||1,2);
+function resize(){W=innerWidth;H=innerHeight;D=Math.min(devicePixelRatio||1,2);cvs.width=W*D;cvs.height=H*D;ctx.setTransform(D,0,0,D,0,0)}addEventListener('resize',resize);resize();
+const world={w:2600,h:900,ground:720};
+const cam={x:0,y:0};
+const p={x:260,y:world.ground-48,vx:0,vy:0,w:30,h:48,dir:1,onGround:true,hp:100,maxHp:100,mp:50,maxMp:50,lv:1,xp:0,next:60,meso:0,atk:0,skill:0,inv:0,dead:false};
+let monsters=[],slashes=[],particles=[],texts=[],gameTime=0,spawn=0,shake=0,questKills=0,dialogTimer=0;
+const keys={},touch={left:false,right:false,attack:false};
+const platforms=[{x:0,y:720,w:2600,h:180},{x:520,y:620,w:240,h:24},{x:920,y:540,w:270,h:24},{x:1320,y:620,w:260,h:24},{x:1740,y:540,w:220,h:24},{x:2140,y:625,w:250,h:24}];
+const portals=[{x:2380,y:620,w:70,h:100}];
+function rect(r,a,b,c,d){return r.x+r.w>a&&r.x<a+c&&r.y+r.h>b&&r.y<b+d}function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function makeMonsters(){monsters=[];for(let i=0;i<7;i++){let elite=i===6;monsters.push({x:650+i*240+(i%2)*80,y:world.ground-40,vx:0,vy:0,w:elite?48:36,h:elite?48:36,hp:elite?75:28,maxHp:elite?75:28,dir:-1,spd:elite?38:30,on:false,cd:0,elite,hit:0})}}
+makeMonsters();
+function jump(){if(p.onGround){p.vy=-620;p.onGround=false}}
+function attack(){if(p.atk>0)return;p.atk=.28;let x=p.x+p.dir*38,y=p.y+18;slashes.push({x,y,life:.16,dir:p.dir});for(const m of monsters){if(!m.dead&&Math.abs(m.x-x)<70&&Math.abs(m.y-m.vy-y)<65&&Math.sign(m.x-p.x)===p.dir||Math.abs(m.x-p.x)<58&&Math.abs(m.y-p.y)<45){hitMonster(m,18+p.lv*2)}}}
+function skill(){if(p.skill>0||p.mp<18)return;p.skill=4;p.mp-=18;shake=6;slashes.push({x:p.x,y:p.y+20,life:.28,dir:p.dir,big:true});for(const m of monsters){if(!m.dead&&Math.abs(m.x-p.x)<120&&Math.abs(m.y-p.y)<75)hitMonster(m,30+p.lv*4)}}
+function hitMonster(m,d){m.hp-=d;m.hit=.18;for(let i=0;i<7;i++)particles.push({x:m.x+m.w/2,y:m.y+m.h/2,vx:(Math.random()-.5)*170,vy:-Math.random()*180,life:.38,color:m.elite?'#ad72ef':'#79b85b'});if(m.hp<=0){m.dead=true;p.xp+=m.elite?24:12;p.meso+=m.elite?35:12;questKills=Math.min(5,questKills+(m.elite?1:1));texts.push({x:m.x,y:m.y-12,text:m.elite?'엑설런트 +24EXP':'+12 EXP',life:1.1,good:true});if(questKills>=5&&p.lv===1){texts.push({x:300,y:620,text:'퀘스트 완료!',life:2,good:true});dialogTimer=4;document.getElementById('dialog').classList.add('show')}}levelUp()}
+function levelUp(){while(p.xp>=p.next){p.xp-=p.next;p.lv++;p.next=Math.floor(p.next*1.35);p.maxHp+=18;p.maxMp+=8;p.hp=p.maxHp;p.mp=p.maxMp;texts.push({x:p.x,y:p.y-35,text:'레벨 업!',life:1.7,good:true})}}
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['arrowleft','arrowright','arrowup',' ','z','x','c'].includes(e.key.toLowerCase()))e.preventDefault();if(e.key==='ArrowUp'||e.key.toLowerCase()==='z')jump();if(e.key.toLowerCase()==='x')attack();if(e.key.toLowerCase()==='c')skill()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+function bindHold(id,action){const el=document.getElementById(id);el.addEventListener('pointerdown',e=>{e.preventPrevent;el.setPointerCapture(e.pointerId);action(true)});el.addEventListener('pointerup',()=>action(false));el.addEventListener('pointercancel',()=>action(false))}
+const attackBtn=document.getElementById('attack');attackBtn.addEventListener('pointerdown',e=>{e.preventDefault();touch.attack=true});attackBtn.addEventListener('pointerup',()=>touch.attack=false);attackBtn.addEventListener('pointercancel',()=>touch.attack=false);document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});document.getElementById('skill').addEventListener('pointerdown',e=>{e.preventDefault();skill()});
+const stick=document.getElementById('stick'),nub=document.getElementById('nub');let stickId=null;
+stick.addEventListener('pointerdown',e=>{e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(stickId);moveStick(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId)moveStick(e)});function moveStick(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),k=Math.min(36,l)/Math.max(l,1);dx*=k;dy*=k;nub.style.transform=`translate(${dx}px,${dy}px)`;touch.left=dx<-7;touch.right=dx>7}function releaseStick(){stickId=null;touch.left=touch.right=false;nub.style.transform='translate(0,0)'}stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);
+function update(dt){gameTime+=dt;p.atk=Math.max(0,p.atk-dt);p.skill=Math.max(0,p.skill-dt);p.inv=Math.max(0,p.inv-dt);p.mp=Math.min(p.maxMp,p.mp+3*dt);shake*=.84;dialogTimer-=dt;if(dialogTimer<=0)document.getElementById('dialog').classList.remove('show');
+ let move=(keys.arrowright||keys.d||touch.right?1:0)-(keys.arrowleft||keys.a||keys.arrowleft||touch.left?1:0);if(move){p.dir=move;p.vx+=move*2100*dt;p.vx=clamp(p.vx,-190,190)}else p.vx*=Math.pow(.0008,dt);
+ p.vy+=1450*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.onGround=false;
+ for(const pl of platforms){if(p.vx>0&&p.x+p.w>pl.x&&p.x+p.w-pl.x<24&&p.y+p.h>pl.y&&p.y<pl.y+pl.h)p.x=pl.x-p.w;if(p.vx<0&&p.x<pl.x+pl.w&&pl.x+pl.w-p.x<24&&p.y+p.h>pl.y&&p.y<pl.y+pl.h)p.x=pl.x+pl.w;if(p.vy>=0&&p.x+p.w>pl.x&&p.x<pl.x+pl.w&&p.y+p.h>=pl.y&&p.y+p.h-p.vy*dt<=pl.y+.5){p.y=pl.y-p.h;p.vy=0;p.onGround=true}}
+ p.x=clamp(p.x,0,world.w-p.w);if(p.y>world.h+100){p.hp=p.maxHp;p.x=260;p.y=world.ground-p.h;p.vx=p.vy=0}
+ if(touch.attack||keys[' ' ]||keys.x)attack();
+ for(const m of monsters){if(m.dead)continue;m.hit-=dt;m.cd-=dt;if(m.x<p.x)m.dir=1;if(m.x>p.x)m.dir=-1;m.vx=m.dir*m.spd;m.x+=m.vx*dt;m.onGround=false;if(rect(m,0,world.ground-1,world.w,1))m.y=world.ground-m.h;if(Math.abs(m.x-p.x)<34&&Math.abs(m.y-p.y)<38&&p.inv<=0&&m.cd<=0){m.cd=.9;p.inv=1;p.hp-=m.elite?18:10;p.vx=m.dir<0?-220:220;p.vy=-180;shake=5;if(p.hp<=0){p.hp=p.maxHp;p.mp=p.maxMp;p.x=260;p.y=world.ground-p.h;p.meso=Math.max(0,p.meso-20);texts.push({x:p.x,y:p.y-30,text:'메소를 잃고 이동했습니다',life:1.8,good:false})}}}
+ monsters=monsters.filter(m=>{if(m.dead&&m.hit>-0.1)return false;if(m.dead)return false;return true});spawn-=dt;if(spawn<=0&&monsters.filter(m=>!m.dead).length<5){let m={x:world.w-300-Math.random()*500,y:world.ground-36,vx:0,vy:0,w:36,h:36,hp:28,maxHp:28,dir:-1,spd:30,on:false,cd:0,elite:false,hit:0};monsters.push(m);spawn=4}
+ for(const s of slashes)s.life-=dt;slashes=slashes.filter(s=>s.life>0);for(const a of particles){a.x+=a.vx*dt;a.y+=a.vy*dt;a.vy+=420*dt;a.life-=dt}particles=particles.filter(a=>a.life>0);for(const t of texts)t.life-=dt;texts=texts.filter(t=>t.life>0);
+ cam.x=clamp(p.x-W/2,0,Math.max(0,world.w-W));cam.y=clamp(p.y-H*.58,0,Math.max(0,world.h-H));
+ document.getElementById('hp').style.width=100*p.hp/p.maxHp+'%';document.getElementById('mp').style.width=100*p.mp/p.maxMp+'%';document.getElementById('xp').style.width=100*p.xp/p.next+'%';document.getElementById('lv').textContent='LV. '+p.lv;document.getElementById('gold').textContent='메소 '+p.meso;document.getElementById('qcount').textContent=questKills+' / 5';
+}
+function pxRect(x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
+function drawTree(x,y,s){pxRect(x,y-80*s,12*s,100*s,'#765638');pxRect(x-35*s,y-105*s,82*s,55*s,'#2f7050');pxRect(x-22*s,y-126*s,56*s,42*s,'#3c895b');pxRect(x-8*s,y-142*s,34*s,28*s,'#58a66a');pxRect(x-48*s,y-72*s,30*s,18*s,'#28714c');pxRect(x+28*s,y-69*s,28*s,17*s,'#28714c')}
+function draw(){ctx.save();ctx.translate(-Math.round(cam.x)+(Math.random()-.5)*shake,-Math.round(cam.y)+(Math.random()-.5)*shake);
+ let sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#88b9cf');sky.addColorStop(.62,'#c7d6a6');sky.addColorStop(1,'#607c58');ctx.fillStyle=sky;ctx.fillRect(cam.x,cam.y,W,H);
+ for(let i=0;i<10;i++){let x=i*310-cam.x*.12%310+100,y=110+(i%3)*20;ctx.fillStyle='#e8f2bba8';ctx.fillRect(x,y,90,12);ctx.fillRect(x+22,y-12,52,12)}
+ ctx.fillStyle='#719c63';for(let i=0;i<12;i++){let x=i*240+20,y=580-(i%3)*20;ctx.beginPath();ctx.moveTo(x,y+140);ctx.lineTo(x+100,y-70);ctx.lineTo(x+180,y+140);ctx.fill()}
+ for(let i=0;i<14;i++)drawTree(i*190+25,675,.75+(i%3)*.12);
+ for(const pl of platforms){pxRect(pl.x,pl.y,pl.w,pl.h,'#5d4a36');for(let x=pl.x;x<pl.x+pl.w;x+=32){pxRect(x,pl.y,30,8,'#75a94d');pxRect(x+(x%64?10:22),pl.y+8,14,14,'#7e6748')} }
+ for(const po of portals){pxRect(po.x+12,po.y+12,po.w-24,po.h-12,'#4f89a6');pxRect(po.x+22,po.y+22,po.w-44,po.h-22,'#87c6ce');pxRect(po.x+8,po.y,54,12,'#6d5f45');pxRect(po.x+16,po.y-10,38,12,'#7d6648')}
+ for(const m of monsters){if(m.dead)continue;ctx.save();ctx.translate(Math.round(m.x),Math.round(m.y));ctx.scale(m.dir,1);pxRect(-m.w/2,m.h-8,m.w,8,'#52694c');pxRect(-m.w/2+4,5,m.w-8,m.h-12,m.elite?'#7152a1':'#6d9f4e');pxRect(-m.w/2,m.h*.45,m.w,10,m.elite?'#9b72cf':'#92c45e');pxRect(-9,-5,18,13,'#eef0bd');pxRect(-5,-1,5,5,'#4b3560');pxRect(5,-1,5,5,'#4b3560');pxRect(-m.w/2-3,m.h-5,8,6,m.elite?'#7152a1':'#6d9f4e');pxRect(m.w/2-5,m.h-5,8,6,m.elite?'#7152a1':'#6d9f4e');ctx.restore();pxRect(m.x,m.y-10,m.w,5,'#3a3138');pxRect(m.x,m.y-10,m.w*m.hp/m.maxHp,5,m.elite?'#a66ee0':'#e66e6c')}
+ ctx.save();ctx.translate(Math.round(p.x+p.w/2),Math.round(p.y));ctx.scale(p.dir,1);ctx.globalAlpha=p.inv>0&&Math.floor(gameTime*12)%2?.45:1;pxRect(-15,38,10,12,'#53412f');pxRect(5,38,10,12,'#53412f');pxRect(-15,16,30,24,'#43558d');pxRect(-11,23,22,16,'#6076b4');pxRect(-11,2,22,16,'#d79d70');pxRect(-10,-5,20,10,'#5a3e35');pxRect(-8,2,5,5,'#26334b');pxRect(5,2,5,5,'#26334b');pxRect(-18,6,7,25,'#d79d70');pxRect(11,6,7,25,'#d79d70');ctx.restore();ctx.globalAlpha=1;
+ for(const s of slashes){ctx.strokeStyle=s.big?'#86e5ff':'#f5eb9a';ctx.lineWidth=s.big?9:6;ctx.beginPath();ctx.arc(p.x+p.w/2,p.y+24,s.big?78:48,s.dir>0?-1.1:1.7,s.dir>0?1.1:4.8);ctx.stroke()}
+ for(const a of particles)pxRect(a.x,a.y,5,5,a.color);ctx.textAlign='center';ctx.font='bold 14px monospace';for(const t of texts){ctx.fillStyle=t.good?'#ffe878':'#ff7d7d';ctx.fillText(t.text,t.x,t.y)}ctx.restore();}
+function loop(n){let dt=Math.min(.033,(n-(loop.t||n))/1000);loop.t=n;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+</script>
+</body>
+</html>
